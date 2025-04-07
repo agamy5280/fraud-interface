@@ -1,0 +1,325 @@
+:root {
+  --primary-color: #1976d2;
+  --hover-color: #f0f7ff;
+  --border-color: #ddd;
+  --header-bg: #f5f5f5;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f9f9f9;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.file-upload {
+  margin: 20px 0;
+}
+
+.search-bar {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px 0 0 4px;
+  font-size: 14px;
+}
+
+.search-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  padding: 0 15px;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  background-color: #fff;
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  margin-right: 5px;
+  margin-bottom: 5px;
+}
+
+.tab.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.table-container {
+  overflow-x: auto;
+  max-height: 600px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: white;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background-color: var(--header-bg);
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: bold;
+  border-bottom: 2px solid var(--border-color);
+}
+
+td {
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+tbody tr:hover {
+  background-color: var(--hover-color);
+}
+
+.clickable {
+  color: var(--primary-color);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pagination-info {
+  font-size: 14px;
+}
+
+.pagination-controls button {
+  background-color: white;
+  border: 1px solid var(--border-color);
+  padding: 5px 10px;
+  margin: 0 5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.pagination-controls button:disabled {
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-controls button.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.rows-per-page {
+  margin-left: 20px;
+}
+
+.rows-per-page select {
+  margin-left: 5px;
+  padding: 5px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: var(--primary-color);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Add these media queries to your existing CSS */
+
+/* Small devices (phones, 600px and down) */
+@media only screen and (max-width: 600px) {
+  .container {
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    text-align: center;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-input {
+    border-radius: 4px;
+    margin-bottom: 10px;
+    width: 100%;
+  }
+
+  .search-button {
+    border-radius: 4px;
+    width: 100%;
+    padding: 10px;
+  }
+
+  .tabs {
+    flex-direction: column;
+    border-bottom: none;
+  }
+
+  .tab {
+    border-radius: 4px;
+    margin-right: 0;
+    margin-bottom: 5px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+  }
+
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-info {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .pagination-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .rows-per-page {
+    margin-left: 0;
+    margin-top: 10px;
+    text-align: center;
+    width: 100%;
+  }
+}
+
+.mobile-table-view td:before {
+  content: attr(data-label);
+  position: absolute;
+  left: 10px;
+  width: 45%;
+  text-align: left;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+/* Ensure the data values don't overlap with truncated labels */
+.mobile-table-view td {
+  display: block;
+  text-align: right;
+  padding-left: 50%;
+  position: relative;
+  border-bottom: none;
+  min-height: 36px; /* Ensures consistent height even with short content */
+  word-wrap: break-word; /* Allow long words to break */
+  word-break: break-word; /* More modern property for break-word */
+}
+
+/* Give more breathing room between rows in mobile view */
+.mobile-table-view tr {
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 10px;
+  display: block;
+  padding: 8px 0;
+}
+
+/* Medium devices (tablets, 768px and down) */
+@media only screen and (max-width: 768px) {
+  /* Adjust font sizes */
+  th,
+  td,
+  .mobile-table-view td,
+  .mobile-table-view td:before {
+    font-size: 0.85rem;
+  }
+
+  /* Improve table scrolling on mobile */
+  .table-container {
+    max-height: 70vh; /* Use viewport height instead of fixed pixels */
+  }
+
+  /* More compact pagination for small screens */
+  .pagination-controls button {
+    padding: 4px 8px;
+    margin: 0 2px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Large devices (laptops/desktops, 992px and up) */
+@media only screen and (min-width: 992px) {
+  .container {
+    padding: 30px;
+  }
+}
+
+@media only screen and (max-width: 480px) {
+  /* Even smaller font for very small devices */
+  th,
+  td,
+  .mobile-table-view td,
+  .mobile-table-view td:before {
+    font-size: 0.8rem;
+  }
+
+  /* Ultra compact pagination */
+  .pagination-controls button {
+    padding: 3px 6px;
+    margin: 0 1px;
+    font-size: 0.8rem;
+  }
+}

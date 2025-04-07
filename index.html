@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fraud Cases Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+        <h1>Fraud Investigation Dashboard</h1>
+        
+        <div class="file-upload">
+            <input type="file" id="fileUpload" accept=".xlsx, .xls" />
+        </div>
+        
+        <div class="search-bar">
+            <input type="text" id="searchInput" class="search-input" 
+                   placeholder="Search by SAMA's Case Serial Number" />
+            <button id="searchButton" class="search-button">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        
+        <div class="tabs" id="tabs">
+            <div class="tab active" data-tab="fraudCases">Fraud Cases</div>
+            <div class="tab" data-tab="clientInfo">Client Info</div>
+            <div class="tab" data-tab="accountInfo">Account Info</div>
+            <div class="tab" data-tab="directChannel">Direct Channel</div>
+            <div class="tab" data-tab="bankServices">Bank Services</div>
+            <div class="tab" data-tab="cards">Cards</div>
+        </div>
+        
+        <div id="tableContainer" class="table-container">
+            <div class="loading">
+                <div>Please upload an Excel file</div>
+            </div>
+        </div>
+        
+        <div class="pagination">
+            <div class="pagination-info" id="paginationInfo">
+                Showing 0-0 of 0 items
+            </div>
+            <div class="pagination-controls" id="paginationControls">
+                <button id="prevPageBtn" disabled>Previous</button>
+                <span id="pageButtons"></span>
+                <button id="nextPageBtn" disabled>Next</button>
+                <span class="rows-per-page">
+                    Rows per page:
+                    <select id="rowsPerPageSelect">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </span>
+            </div>
+        </div>
+    </div>
+    <script src="dashboard.js"></script>
+</html>
