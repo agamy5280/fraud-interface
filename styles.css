@@ -276,7 +276,309 @@ tbody tr:hover {
   display: block;
   padding: 8px 0;
 }
+/* Add these styles to your existing CSS */
 
+.filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+  margin-bottom: 10px;
+}
+
+.filter-group label {
+  margin-right: 5px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.filter-group select {
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.clear-filters {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: auto;
+  align-self: flex-end;
+}
+
+.clear-filters:hover {
+  background-color: #e53935;
+}
+
+/* Style for sortable column headers */
+th.sortable {
+  position: relative;
+  padding-right: 20px; /* Space for the sort icon */
+}
+
+th.sortable::after {
+  content: "↕"; /* Default sort icon */
+  position: absolute;
+  right: 5px;
+  opacity: 0.5;
+}
+
+th.sortable[data-sort="asc"]::after {
+  content: "↑";
+  opacity: 1;
+}
+
+th.sortable[data-sort="desc"]::after {
+  content: "↓";
+  opacity: 1;
+}
+
+th.sortable:hover {
+  background-color: #e9e9e9;
+}
+
+/* Column filter styles */
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.column-filter-icon {
+  cursor: pointer;
+  opacity: 0.7;
+  margin-left: 5px;
+}
+
+.column-filter-icon:hover {
+  opacity: 1;
+}
+
+.column-filter-icon.active {
+  color: var(--primary-color);
+  opacity: 1;
+}
+
+.column-filter-popup {
+  position: absolute;
+  background: white;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  width: 250px;
+  max-height: 350px;
+  overflow-y: auto;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.filter-search {
+  margin-bottom: 10px;
+}
+
+.filter-search-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.filter-options {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.filter-options label {
+  display: block;
+  padding: 4px 0;
+}
+
+.filter-buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
+.filter-buttons button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.apply-filter,
+.apply-date-filter {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.clear-filter,
+.clear-date-filter {
+  background-color: #f44336;
+  color: white;
+}
+
+.date-filter h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.date-range label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.date-range input {
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.mobile-filters {
+  display: flex;
+  margin-bottom: 15px;
+  gap: 8px;
+}
+
+.mobile-column-select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.mobile-filter-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+/* Updated CSS for sort icons */
+th.sortable {
+  position: relative;
+  cursor: pointer;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 5px;
+}
+
+.column-title {
+  flex-grow: 1;
+  margin-right: 5px;
+}
+
+.column-filter-icon {
+  display: inline-flex;
+  cursor: pointer;
+  opacity: 0.7;
+  margin-left: 3px;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-filter-icon:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.column-filter-icon.active {
+  color: var(--primary-color);
+  opacity: 1;
+}
+
+/* Style for amount filter inputs */
+.amount-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.amount-range label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.amount-range input {
+  width: 120px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.amount-filter h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+/* Make sure the filter popup is above everything else */
+.column-filter-popup {
+  z-index: 1000;
+}
+
+/* Responsive styles for filters */
+@media only screen and (max-width: 768px) {
+  .filter-container {
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .filter-group label {
+    margin-bottom: 5px;
+  }
+
+  .filter-group select {
+    width: 100%;
+  }
+
+  .clear-filters {
+    width: 100%;
+    margin-top: 10px;
+    margin-left: 0;
+  }
+}
 /* Medium devices (tablets, 768px and down) */
 @media only screen and (max-width: 768px) {
   /* Adjust font sizes */

@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
+  // Data state variables
   let excelData = {
     fraudCases: [],
     clientInfo: [],
@@ -11,7 +12,13 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentPage = 0;
   let rowsPerPage = 10;
   let filteredData = [];
+  let sortConfig = {
+    column: null,
+    direction: "asc",
+  };
+  let activeFilters = {};
 
+  // Column mapping for multilingual/complex headers
   let columnMappings = {
     fraudCases: {},
     clientInfo: {},
@@ -30,46 +37,32 @@ document.addEventListener("DOMContentLoaded", function () {
     cards: {},
   };
 
-  const fileUpload = document.getElementById("fileUpload");
-  const searchInput = document.getElementById("searchInput");
-  const searchButton = document.getElementById("searchButton");
-  const tabs = document.getElementById("tabs").querySelectorAll(".tab");
-  const tableContainer = document.getElementById("tableContainer");
-  const paginationInfo = document.getElementById("paginationInfo");
-  const prevPageBtn = document.getElementById("prevPageBtn");
-  const nextPageBtn = document.getElementById("nextPageBtn");
-  const pageButtons = document.getElementById("pageButtons");
-  const rowsPerPageSelect = document.getElementById("rowsPerPageSelect");
+  // Define important columns for each tab for filtering
+  const keyColumnsForFiltering = {
+    fraudCases: [
+      "SAMA's Case Serial Number",
+      "Case Type",
+      "Amount",
+      "Case Date",
+      "Case Executed By",
+    ],
+    clientInfo: [
+      "Client's National/Residency/Commercial ID",
+      "Client Status",
+      "City",
+    ],
+    accountInfo: ["Account Number", "Account Type", "Branch"],
+    directChannel: [
+      "Transaction ID (Unique)",
+      "Transaction Amount",
+      "Transaction Status",
+      "Payment Method",
+    ],
+    bankServices: ["E-Services Session ID", "IP Address", "Browser"],
+    cards: ["Card Number", "Card Type", "Transaction Amount"],
+  };
 
-  function normalizeColumnName(columnName) {
-    if (!columnName) return "Column";
-
-    const columnMapping = {
-      "In Case of (Unauthorized), was there a Sim Swap\nفي حال تمت من قبل المحتال (unauthorized) هل تمت من خلالها استبدال شرائح الاتصال":
-        "Sim Swap Occurred",
-      "Was the device used to log in into the digital channels  previously used to perform any undisputed / normal course of business transactions before the fraud case ?\nهل الجهاز المستخدم في عملية الدخول على الخدمات الإلكترونية تم منه تنفيذ عمليات مالية غبر معترض عليها قبل تنفيذ عمليات الاحتيال":
-        "Previous Normal Transactions",
-      "Case done by: Fraudster (Unauthorized) or Client (Authorized)\nهل تم تنفيذ الحالة من قبل (العميل، المحتال)":
-        "Case Executed By",
-      "Is there screen sharing during fraud case? هل توجد مشاركة شاشة أثناء حالة الاحتيال؟":
-        "Screen Sharing During Fraud",
-      "Did The Client Notify The Law Inforcment": "Law Enforcement Notified",
-      " Case done by: Fraudster (Unauthorized) or Client (Authorized)\nهل تم تنفيذ الحالة من قبل (العميل، المحتال)\n":
-        "Case Executed By",
-    };
-
-    if (columnMapping[columnName]) {
-      return columnMapping[columnName];
-    }
-
-    if (columnName.includes("\n") || /[\u0600-\u06FF]/.test(columnName)) {
-      const cleanedName = columnName.split("\n")[0].trim();
-      return cleanedName;
-    }
-
-    return columnName.trim();
-  }
-
+  // Navigation mapping for linked data
   const navigationMap = {
     "Number of Fraud Transactions": {
       fromTab: "fraudCases",
@@ -135,15 +128,20 @@ document.addEventListener("DOMContentLoaded", function () {
     },
   };
 
-  const tabKeys = {
-    fraudCases: 0,
-    clientInfo: 1,
-    accountInfo: 2,
-    directChannel: 3,
-    bankServices: 4,
-    cards: 5,
-  };
+  // DOM elements
+  const fileUpload = document.getElementById("fileUpload");
+  const searchInput = document.getElementById("searchInput");
+  const searchButton = document.getElementById("searchButton");
+  const tabs = document.getElementById("tabs").querySelectorAll(".tab");
+  const tableContainer = document.getElementById("tableContainer");
+  const paginationInfo = document.getElementById("paginationInfo");
+  const prevPageBtn = document.getElementById("prevPageBtn");
+  const nextPageBtn = document.getElementById("nextPageBtn");
+  const pageButtons = document.getElementById("pageButtons");
+  const rowsPerPageSelect = document.getElementById("rowsPerPageSelect");
+  const clearFiltersBtn = document.getElementById("clearFiltersBtn");
 
+  // Event Listeners
   fileUpload.addEventListener("change", handleFileUpload);
   searchButton.addEventListener("click", handleSearch);
   searchInput.addEventListener("keypress", function (e) {
@@ -178,6 +176,49 @@ document.addEventListener("DOMContentLoaded", function () {
     renderTable();
   });
 
+  clearFiltersBtn.addEventListener("click", clearAllFilters);
+
+  // Utility functions
+  function normalizeColumnName(columnName) {
+    if (!columnName) return "Column";
+
+    const columnMapping = {
+      "In Case of (Unauthorized), was there a Sim Swap\nفي حال تمت من قبل المحتال (unauthorized) هل تمت من خلالها استبدال شرائح الاتصال":
+        "Sim Swap Occurred",
+      "Was the device used to log in into the digital channels  previously used to perform any undisputed / normal course of business transactions before the fraud case ?\nهل الجهاز المستخدم في عملية الدخول على الخدمات الإلكترونية تم منه تنفيذ عمليات مالية غبر معترض عليها قبل تنفيذ عمليات الاحتيال":
+        "Previous Normal Transactions",
+      "Case done by: Fraudster (Unauthorized) or Client (Authorized)\nهل تم تنفيذ الحالة من قبل (العميل، المحتال)":
+        "Case Executed By",
+      "Is there screen sharing during fraud case? هل توجد مشاركة شاشة أثناء حالة الاحتيال؟":
+        "Screen Sharing During Fraud",
+      "Did The Client Notify The Law Inforcment": "Law Enforcement Notified",
+      " Case done by: Fraudster (Unauthorized) or Client (Authorized)\nهل تم تنفيذ الحالة من قبل (العميل، المحتال)\n":
+        "Case Executed By",
+    };
+
+    if (columnMapping[columnName]) {
+      return columnMapping[columnName];
+    }
+
+    if (columnName.includes("\n") || /[\u0600-\u06FF]/.test(columnName)) {
+      const cleanedName = columnName.split("\n")[0].trim();
+      return cleanedName;
+    }
+
+    return columnName.trim();
+  }
+
+  function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return "";
+    return String(unsafe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // Core functionality
   function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -233,6 +274,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         filteredData = excelData[currentTab];
         currentPage = 0;
+        activeFilters = {};
         renderTable();
       } catch (error) {
         console.error("Error processing file:", error);
@@ -316,6 +358,9 @@ document.addEventListener("DOMContentLoaded", function () {
   function handleSearch() {
     const searchText = searchInput.value.trim().toLowerCase();
 
+    // Reset activeFilters when performing a new search
+    activeFilters = {};
+
     if (!searchText) {
       filteredData = excelData[currentTab] || [];
     } else {
@@ -343,6 +388,11 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     currentTab = tabName;
+
+    // Reset filters and sort when changing tabs
+    activeFilters = {};
+    sortConfig = { column: null, direction: "asc" };
+
     filteredData = excelData[currentTab] || [];
     currentPage = 0;
     renderTable();
@@ -384,6 +434,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       if (samaID) {
+        // Reset filters when navigating
+        activeFilters = {};
+        sortConfig = { column: null, direction: "asc" };
+
         changeTab(tabName);
 
         const possibleTargetFields = [
@@ -432,6 +486,10 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
     }
+
+    // Reset filters when navigating
+    activeFilters = {};
+    sortConfig = { column: null, direction: "asc" };
 
     changeTab(tabName);
 
@@ -547,6 +605,483 @@ document.addEventListener("DOMContentLoaded", function () {
     return null;
   }
 
+  function sortData(column) {
+    // Toggle direction if clicking the same column
+    if (sortConfig.column === column) {
+      sortConfig.direction = sortConfig.direction === "asc" ? "desc" : "asc";
+    } else {
+      sortConfig.column = column;
+      sortConfig.direction = "asc";
+    }
+
+    filteredData.sort((a, b) => {
+      const valA =
+        a[column] !== undefined && a[column] !== null ? a[column] : "";
+      const valB =
+        b[column] !== undefined && b[column] !== null ? b[column] : "";
+
+      // Check if values can be converted to numbers
+      const numA = parseFloat(valA);
+      const numB = parseFloat(valB);
+
+      let comparison = 0;
+      if (!isNaN(numA) && !isNaN(numB)) {
+        // Sort numerically
+        comparison = numA - numB;
+      } else {
+        // Sort alphabetically
+        comparison = String(valA).localeCompare(String(valB));
+      }
+
+      return sortConfig.direction === "asc" ? comparison : -comparison;
+    });
+
+    currentPage = 0;
+    renderTable();
+  }
+
+  function detectDateColumn(columnName) {
+    const datePatterns = [
+      "date",
+      "time",
+      "created",
+      "updated",
+      "when",
+      "day",
+      "month",
+      "year",
+    ];
+
+    if (
+      datePatterns.some((pattern) => columnName.toLowerCase().includes(pattern))
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function detectAmountColumn(columnName) {
+    const amountPatterns = [
+      "amount",
+      "total",
+      "balance",
+      "money",
+      "price",
+      "cost",
+      "fee",
+      "salary",
+      "payment",
+      "revenue",
+      "expense",
+      "profit",
+      "loss",
+      "sar",
+      "usd",
+      "eur",
+      "gbp",
+      "jpy",
+      "budget",
+      "frozen",
+      "held",
+      "value",
+      "fund",
+    ];
+
+    const lowercaseCol = columnName.toLowerCase();
+
+    if (amountPatterns.some((pattern) => lowercaseCol.includes(pattern))) {
+      return true;
+    }
+
+    if (/[$€£¥]/.test(columnName) || /\(\s*sar\s*\)/i.test(columnName)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function applyAmountRangeFilter(column, minAmount, maxAmount) {
+    if ((!minAmount || minAmount === "") && (!maxAmount || maxAmount === "")) {
+      delete activeFilters[column];
+    } else {
+      activeFilters[column] = {
+        type: "amountRange",
+        min: minAmount && minAmount !== "" ? parseFloat(minAmount) : null,
+        max: maxAmount && maxAmount !== "" ? parseFloat(maxAmount) : null,
+      };
+    }
+
+    applyFilters();
+    closeAllFilterPopups();
+  }
+
+  function setupFilterPopupEvents(popup, column) {
+    // For text filter popups
+    const searchInput = popup.querySelector(".filter-search-input");
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        const filterText = this.value.toLowerCase();
+        const options = popup.querySelectorAll(
+          ".filter-options label:not(:first-child)"
+        );
+
+        options.forEach((option) => {
+          const text = option.textContent.toLowerCase();
+          if (text.includes(filterText)) {
+            option.style.display = "";
+          } else {
+            option.style.display = "none";
+          }
+        });
+      });
+    }
+
+    // Handle "Select All" checkbox
+    const selectAllCheckbox = popup.querySelector(".select-all-option");
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener("change", function () {
+        const checkboxes = popup.querySelectorAll(
+          '.filter-options input[type="checkbox"]:not(.select-all-option)'
+        );
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = this.checked;
+        });
+      });
+    }
+
+    // For applying text filters
+    const applyFilterBtn = popup.querySelector(".apply-filter");
+    if (applyFilterBtn) {
+      applyFilterBtn.addEventListener("click", function () {
+        const selectedValues = [];
+        const checkboxes = popup.querySelectorAll(
+          '.filter-options input[type="checkbox"]:not(.select-all-option)'
+        );
+
+        checkboxes.forEach((checkbox) => {
+          if (checkbox.checked) {
+            selectedValues.push(checkbox.value);
+          }
+        });
+
+        applyColumnFilter(column, selectedValues);
+      });
+    }
+
+    // For applying amount filters
+    const applyAmountFilterBtn = popup.querySelector(".apply-amount-filter");
+    if (applyAmountFilterBtn) {
+      applyAmountFilterBtn.addEventListener("click", function () {
+        const minAmount = popup.querySelector(".amount-min").value;
+        const maxAmount = popup.querySelector(".amount-max").value;
+
+        applyAmountRangeFilter(column, minAmount, maxAmount);
+      });
+    }
+
+    // For clearing filters
+    const clearFilterBtn = popup.querySelector(
+      ".clear-filter, .clear-date-filter, .clear-amount-filter"
+    );
+    if (clearFilterBtn) {
+      clearFilterBtn.addEventListener("click", function () {
+        if (popup.querySelector(".amount-min")) {
+          popup.querySelector(".amount-min").value = "";
+          popup.querySelector(".amount-max").value = "";
+        }
+        delete activeFilters[column];
+        applyFilters();
+        closeAllFilterPopups();
+      });
+    }
+  }
+
+  function closeAllFilterPopups() {
+    const popups = document.querySelectorAll(".column-filter-popup");
+    popups.forEach((popup) => {
+      popup.remove();
+    });
+  }
+
+  // Add document click listener to close popups when clicking outside
+  document.addEventListener("click", function (e) {
+    if (
+      !e.target.closest(".column-filter-popup") &&
+      !e.target.closest(".column-filter-icon")
+    ) {
+      closeAllFilterPopups();
+    }
+  });
+
+  function showColumnFilter(column, element) {
+    // Close any open filter popups
+    closeAllFilterPopups();
+
+    const isDateColumn = detectDateColumn(column);
+    const isAmountColumn = detectAmountColumn(column);
+    const uniqueValues = getUniqueColumnValues(column);
+
+    const popup = document.createElement("div");
+    popup.className = "column-filter-popup";
+    popup.setAttribute("data-column", column);
+
+    if (isDateColumn) {
+      // Create simple date filter (not date range)
+      let filterHTML = `
+        <div class="filter-search">
+          <input type="text" placeholder="Search dates..." class="filter-search-input">
+        </div>
+        <div class="filter-options">
+          <label><input type="checkbox" class="select-all-option" checked> (Select All)</label>
+      `;
+
+      uniqueValues.forEach((value) => {
+        const displayValue = value === "" ? "(Blank)" : value;
+        const isChecked =
+          !activeFilters[column] ||
+          (activeFilters[column] &&
+            Array.isArray(activeFilters[column]) &&
+            activeFilters[column].includes(value));
+
+        filterHTML += `
+          <label><input type="checkbox" value="${escapeHtml(value)}" ${
+          isChecked ? "checked" : ""
+        }> ${escapeHtml(displayValue)}</label>
+        `;
+      });
+
+      filterHTML += `
+        </div>
+        <div class="filter-buttons">
+          <button class="apply-filter" data-column="${column}">Apply</button>
+          <button class="clear-filter" data-column="${column}">Clear</button>
+        </div>
+      `;
+
+      popup.innerHTML = filterHTML;
+    } else if (isAmountColumn) {
+      // Extract min and max amounts from data
+      let minAmount = null;
+      let maxAmount = null;
+
+      excelData[currentTab].forEach((row) => {
+        if (row[column]) {
+          // Extract numeric value, removing currency symbols and formatting
+          let rawValue = String(row[column]).replace(/[^0-9.-]/g, "");
+          let numValue = parseFloat(rawValue);
+
+          if (!isNaN(numValue)) {
+            if (minAmount === null || numValue < minAmount)
+              minAmount = numValue;
+            if (maxAmount === null || numValue > maxAmount)
+              maxAmount = numValue;
+          }
+        }
+      });
+
+      // Get current filter values
+      let currentMinAmount = "";
+      let currentMaxAmount = "";
+
+      if (
+        activeFilters[column] &&
+        activeFilters[column].type === "amountRange"
+      ) {
+        if (activeFilters[column].min !== null) {
+          currentMinAmount = activeFilters[column].min;
+        }
+        if (activeFilters[column].max !== null) {
+          currentMaxAmount = activeFilters[column].max;
+        }
+      }
+
+      // Create amount range filter
+      const amountFilterHTML = `
+        <div class="amount-filter">
+          <h4>Filter by Amount Range</h4>
+          <div class="amount-range">
+            <label>Min: <input type="number" step="0.01" class="amount-min" data-column="${column}" value="${currentMinAmount}" min="${
+        minAmount || 0
+      }" max="${maxAmount || 9999999}"></label>
+            <label>Max: <input type="number" step="0.01" class="amount-max" data-column="${column}" value="${currentMaxAmount}" min="${
+        minAmount || 0
+      }" max="${maxAmount || 9999999}"></label>
+          </div>
+          <div class="filter-buttons">
+            <button class="apply-amount-filter" data-column="${column}">Apply</button>
+            <button class="clear-amount-filter" data-column="${column}">Clear</button>
+          </div>
+        </div>
+      `;
+      popup.innerHTML = amountFilterHTML;
+    } else {
+      // Standard text filter (unchanged)
+      let filterHTML = `
+        <div class="filter-search">
+          <input type="text" placeholder="Search values..." class="filter-search-input">
+        </div>
+        <div class="filter-options">
+          <label><input type="checkbox" class="select-all-option" checked> (Select All)</label>
+      `;
+
+      uniqueValues.forEach((value) => {
+        const displayValue = value === "" ? "(Blank)" : value;
+        const isChecked =
+          !activeFilters[column] ||
+          (activeFilters[column] &&
+            Array.isArray(activeFilters[column]) &&
+            activeFilters[column].includes(value));
+
+        filterHTML += `
+          <label><input type="checkbox" value="${escapeHtml(value)}" ${
+          isChecked ? "checked" : ""
+        }> ${escapeHtml(displayValue)}</label>
+        `;
+      });
+
+      filterHTML += `
+        </div>
+        <div class="filter-buttons">
+          <button class="apply-filter" data-column="${column}">Apply</button>
+          <button class="clear-filter" data-column="${column}">Clear</button>
+        </div>`;
+
+      popup.innerHTML = filterHTML;
+    }
+
+    // Position and show popup
+    const rect = element.getBoundingClientRect();
+    popup.style.top = rect.bottom + window.scrollY + "px";
+    popup.style.left = rect.left + window.scrollX + "px";
+
+    document.body.appendChild(popup);
+
+    // Add event listeners for the popup
+    setupFilterPopupEvents(popup, column);
+  }
+
+  function applyColumnFilter(column, selectedValues) {
+    // Update active filters
+    if (
+      selectedValues.length === 0 ||
+      selectedValues.length === getUniqueColumnValues(column).length
+    ) {
+      // If all or none selected, remove filter
+      delete activeFilters[column];
+    } else {
+      // Store selected values
+      activeFilters[column] = selectedValues;
+    }
+
+    applyFilters();
+    closeAllFilterPopups();
+  }
+
+  function applyFilters() {
+    // Start with all data from current tab
+    let filtered = excelData[currentTab] || [];
+
+    // Apply active filters
+    if (Object.keys(activeFilters).length > 0) {
+      filtered = filtered.filter((row) => {
+        return Object.entries(activeFilters).every(([column, filter]) => {
+          // Skip if column doesn't exist in this row
+          if (row[column] === undefined) return false;
+
+          // Handle different filter types
+          if (filter && typeof filter === "object" && !Array.isArray(filter)) {
+            // Handle object-type filters (amount range and date range)
+            if (filter.type === "amountRange") {
+              // Amount range filter
+              let rowValue = row[column];
+
+              // Extract numeric value
+              let numericString = String(rowValue).replace(/[^0-9.-]/g, "");
+              let numValue = parseFloat(numericString);
+
+              // Skip invalid numbers
+              if (isNaN(numValue)) return false;
+
+              // Check range conditions
+              if (filter.min !== null && numValue < filter.min) return false;
+              if (filter.max !== null && numValue > filter.max) return false;
+
+              return true;
+            } else if (filter.type === "dateRange") {
+              // Date range filter code
+              let rowValue = row[column];
+              let rowDate;
+
+              if (typeof rowValue === "number") {
+                rowDate = new Date(
+                  Math.round((rowValue - 25569) * 86400 * 1000)
+                );
+              } else {
+                rowDate = new Date(rowValue);
+              }
+
+              if (isNaN(rowDate.getTime())) return false;
+
+              if (filter.from && rowDate < filter.from) return false;
+              if (filter.to && rowDate > filter.to) return false;
+
+              return true;
+            }
+            return false;
+          } else if (Array.isArray(filter)) {
+            // Multiple values filter (checkbox list)
+            const rowValueStr = String(row[column] || "");
+            return filter.includes(rowValueStr);
+          } else {
+            // Single value filter
+            return String(row[column]) === String(filter);
+          }
+        });
+      });
+    }
+
+    // Apply search
+    const searchText = searchInput.value.trim().toLowerCase();
+    if (searchText) {
+      filtered = filtered.filter((row) => {
+        return Object.values(row).some(
+          (value) =>
+            value !== null &&
+            value !== undefined &&
+            String(value).toLowerCase().includes(searchText)
+        );
+      });
+    }
+
+    filteredData = filtered;
+    currentPage = 0;
+    renderTable();
+  }
+
+  function getUniqueColumnValues(column) {
+    const values = new Set();
+    excelData[currentTab].forEach((row) => {
+      if (row[column] !== undefined) {
+        values.add(String(row[column]));
+      }
+    });
+    return Array.from(values).sort();
+  }
+
+  function clearAllFilters() {
+    // Clear search
+    searchInput.value = "";
+
+    // Clear all active filters
+    activeFilters = {};
+
+    // Reset to full data for current tab
+    filteredData = excelData[currentTab] || [];
+    currentPage = 0;
+    renderTable();
+  }
+
   function renderTable() {
     if (!filteredData || filteredData.length === 0) {
       tableContainer.innerHTML = '<div class="loading">No data available</div>';
@@ -575,16 +1110,6 @@ document.addEventListener("DOMContentLoaded", function () {
       Math.min(end, filteredData.length),
       filteredData.length
     );
-  }
-
-  function escapeHtml(unsafe) {
-    if (unsafe === null || unsafe === undefined) return "";
-    return String(unsafe)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
   }
 
   function updatePagination(start, end, total) {
@@ -650,7 +1175,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function createResponsiveTables(pageData, columns, startIndex) {
     if (window.innerWidth <= 768) {
-      let tableHTML = '<table class="mobile-table-view"><tbody>';
+      // Add a filter row at the top for mobile
+      let tableHTML = '<div class="mobile-filters">';
+
+      // Add dropdown selector for columns
+      tableHTML += `<select id="mobileColumnFilter" class="mobile-column-select">
+                      <option value="">Select column to filter...</option>
+                      ${columns
+                        .map(
+                          (col) =>
+                            `<option value="${escapeHtml(col)}">${escapeHtml(
+                              col
+                            )}</option>`
+                        )
+                        .join("")}
+                    </select>
+                    <button id="mobileFilterBtn" class="mobile-filter-btn">
+                      <i class="fas fa-filter"></i> Filter
+                    </button>`;
+
+      tableHTML += '</div><table class="mobile-table-view"><tbody>';
 
       pageData.forEach((row, rowIndex) => {
         const actualRowIndex = startIndex + rowIndex;
@@ -702,18 +1246,57 @@ document.addEventListener("DOMContentLoaded", function () {
 
       tableHTML += "</tbody></table>";
       tableContainer.innerHTML = tableHTML;
+
+      // Attach mobile filter button event listener
+      setTimeout(() => {
+        const mobileFilterBtn = document.getElementById("mobileFilterBtn");
+        if (mobileFilterBtn) {
+          mobileFilterBtn.addEventListener("click", function () {
+            const select = document.getElementById("mobileColumnFilter");
+            const column = select.value;
+            if (column) {
+              showColumnFilter(column, this);
+            }
+          });
+        }
+      }, 0);
     } else {
       let tableHTML = `
-            <table>
-                <thead>
-                    <tr>
-                        ${columns
-                          .map((col) => `<th>${escapeHtml(col)}</th>`)
-                          .join("")}
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+  <table>
+      <thead>
+          <tr>
+              ${columns
+                .map((col) => {
+                  const sortIcon =
+                    sortConfig.column === col
+                      ? sortConfig.direction === "asc"
+                        ? " ↑"
+                        : " ↓"
+                      : "";
+
+                  const filterActiveClass = activeFilters[col] ? "active" : "";
+
+                  return `
+                      <th class="sortable" data-column="${escapeHtml(col)}">
+                          <div class="column-header">
+                              <span class="column-title">${escapeHtml(
+                                col
+                              )}${sortIcon}</span>
+                              <div class="column-filter-icon ${filterActiveClass}" data-column="${escapeHtml(
+                    col
+                  )}">
+                                  <i class="fas fa-filter" data-column="${escapeHtml(
+                                    col
+                                  )}"></i>
+                              </div>
+                          </div>
+                      </th>`;
+                })
+                .join("")}
+          </tr>
+      </thead>
+      <tbody>
+`;
 
       pageData.forEach((row, rowIndex) => {
         const actualRowIndex = startIndex + rowIndex;
@@ -767,26 +1350,66 @@ document.addEventListener("DOMContentLoaded", function () {
       tableContainer.innerHTML = tableHTML;
     }
 
-    document.querySelectorAll(".clickable").forEach((link) => {
-      link.addEventListener("click", function (e) {
-        e.preventDefault();
-        const toTab = this.getAttribute("data-to-tab");
-        const linkField = this.getAttribute("data-link-field");
-        const value = this.getAttribute("data-value");
-        const rowIndex = parseInt(this.getAttribute("data-row-index"));
+    // Use a small timeout to ensure DOM is fully updated
+    setTimeout(() => {
+      // 1. Set up filter icon click handlers
+      document
+        .querySelectorAll(".column-filter-icon, .column-filter-icon i")
+        .forEach((element) => {
+          element.removeEventListener("click", handleFilterClick); // Remove old handlers if any
+          element.addEventListener("click", handleFilterClick);
+        });
 
-        const rowData = filteredData[rowIndex];
-        navigateToTab(toTab, linkField, value, rowData);
+      // 2. Set up column header sort handlers
+      document.querySelectorAll("th.sortable").forEach((header) => {
+        header.addEventListener("click", function (e) {
+          // Only sort if the click was not on the filter icon
+          if (!e.target.closest(".column-filter-icon")) {
+            const column = this.getAttribute("data-column");
+            sortData(column);
+          }
+        });
+        header.style.cursor = "pointer";
       });
-    });
+
+      // 3. Set up navigation link click handlers
+      document.querySelectorAll(".clickable").forEach((link) => {
+        link.addEventListener("click", function (e) {
+          e.preventDefault();
+          const toTab = this.getAttribute("data-to-tab");
+          const linkField = this.getAttribute("data-link-field");
+          const value = this.getAttribute("data-value");
+          const rowIndex = parseInt(this.getAttribute("data-row-index"));
+
+          const rowData = filteredData[rowIndex];
+          navigateToTab(toTab, linkField, value, rowData);
+        });
+      });
+    }, 0);
+
+    // Helper function for filter click handling
+    function handleFilterClick(e) {
+      e.preventDefault();
+      e.stopPropagation(); // Prevent triggering sort
+
+      let column = this.getAttribute("data-column");
+      if (!column && this.parentElement) {
+        // Try to get from parent if it's the icon element
+        column = this.parentElement.getAttribute("data-column");
+      }
+
+      if (column) {
+        showColumnFilter(column, this);
+      }
+    }
   }
 
   window.addEventListener("resize", function () {
-    if (window.currentTabData && window.currentHeaders) {
+    if (window.currentPageData && window.currentColumns) {
       createResponsiveTables(
-        window.currentTabData,
-        window.currentHeaders,
-        "tableContainer"
+        window.currentPageData,
+        window.currentColumns,
+        window.currentStart || 0
       );
     }
   });
