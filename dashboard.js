@@ -8,6 +8,15 @@ document.addEventListener("DOMContentLoaded", function () {
     bankServices: [],
     cards: [],
   };
+  // New: Store sorted data for each tab
+  let sortedExcelData = {
+    fraudCases: null,
+    clientInfo: null,
+    accountInfo: null,
+    directChannel: null,
+    bankServices: null,
+    cards: null,
+  };
   let currentTab = "fraudCases";
   let currentPage = 0;
   let rowsPerPage = 10;
@@ -16,6 +25,8 @@ document.addEventListener("DOMContentLoaded", function () {
     column: null,
     direction: "asc",
   };
+  // New: Flag to indicate if global sorting is active
+  let globalSortActive = false;
   let activeFilters = {};
 
   // Column mapping for multilingual/complex headers
@@ -272,9 +283,14 @@ document.addEventListener("DOMContentLoaded", function () {
           processSheetData(workbook, "4.2-Cards", "cards") ||
           [];
 
+        // Reset sorted data on new file upload
+        resetSortedData();
+
         filteredData = excelData[currentTab];
         currentPage = 0;
         activeFilters = {};
+        globalSortActive = false;
+        sortConfig = { column: null, direction: "asc" };
         renderTable();
       } catch (error) {
         console.error("Error processing file:", error);
@@ -291,6 +307,13 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     reader.readAsBinaryString(file);
+  }
+
+  // New: Function to reset sorted data
+  function resetSortedData() {
+    Object.keys(sortedExcelData).forEach((key) => {
+      sortedExcelData[key] = null;
+    });
   }
 
   function processSheetData(workbook, sheetName, tabName) {
@@ -361,10 +384,16 @@ document.addEventListener("DOMContentLoaded", function () {
     // Reset activeFilters when performing a new search
     activeFilters = {};
 
+    // Get source data based on whether we have sorted data or not
+    const sourceData =
+      globalSortActive && sortedExcelData[currentTab]
+        ? sortedExcelData[currentTab]
+        : excelData[currentTab] || [];
+
     if (!searchText) {
-      filteredData = excelData[currentTab] || [];
+      filteredData = sourceData;
     } else {
-      filteredData = (excelData[currentTab] || []).filter((row) => {
+      filteredData = sourceData.filter((row) => {
         return Object.values(row).some(
           (value) =>
             value !== null &&
@@ -389,11 +418,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     currentTab = tabName;
 
-    // Reset filters and sort when changing tabs
+    // Reset filters but keep sortConfig when changing tabs
     activeFilters = {};
-    sortConfig = { column: null, direction: "asc" };
 
-    filteredData = excelData[currentTab] || [];
+    // Use sorted data if global sort is active, otherwise use original data
+    if (globalSortActive && sortedExcelData[tabName]) {
+      filteredData = sortedExcelData[tabName];
+    } else {
+      filteredData = excelData[tabName] || [];
+    }
+
     currentPage = 0;
     renderTable();
   }
@@ -436,7 +470,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (samaID) {
         // Reset filters when navigating
         activeFilters = {};
-        sortConfig = { column: null, direction: "asc" };
+        // Don't reset sort config
 
         changeTab(tabName);
 
@@ -449,10 +483,16 @@ document.addEventListener("DOMContentLoaded", function () {
           "SAMA ID",
         ];
 
+        // Get source data based on whether we have sorted data or not
+        const sourceData =
+          globalSortActive && sortedExcelData[tabName]
+            ? sortedExcelData[tabName]
+            : excelData[tabName] || [];
+
         let matchingRows = [];
 
         for (const fieldName of possibleTargetFields) {
-          const matches = (excelData[tabName] || []).filter((row) => {
+          const matches = sourceData.filter((row) => {
             if (!row[fieldName]) return false;
             return String(row[fieldName]) === String(samaID);
           });
@@ -464,7 +504,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         if (matchingRows.length === 0) {
-          matchingRows = (excelData[tabName] || []).filter((row) => {
+          matchingRows = sourceData.filter((row) => {
             return Object.entries(row).some(([key, value]) => {
               return String(value) === String(samaID);
             });
@@ -489,20 +529,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Reset filters when navigating
     activeFilters = {};
-    sortConfig = { column: null, direction: "asc" };
+    // Don't reset sort config
 
     changeTab(tabName);
 
     if (filterField && filterValue !== undefined) {
+      // Get source data based on whether we have sorted data or not
+      const sourceData =
+        globalSortActive && sortedExcelData[tabName]
+          ? sortedExcelData[tabName]
+          : excelData[tabName] || [];
+
       const stringFilterValue = String(filterValue);
-      let matchingRows = (excelData[tabName] || []).filter((row) => {
+      let matchingRows = sourceData.filter((row) => {
         if (!row[filterField]) return false;
         return String(row[filterField]) === stringFilterValue;
       });
 
       filteredData = matchingRows;
     } else {
-      filteredData = excelData[tabName] || [];
+      filteredData =
+        globalSortActive && sortedExcelData[tabName]
+          ? sortedExcelData[tabName]
+          : excelData[tabName] || [];
     }
 
     currentPage = 0;
@@ -605,6 +654,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return null;
   }
 
+  // Modified: sortData function to maintain sorting across all tabs
   function sortData(column) {
     // Toggle direction if clicking the same column
     if (sortConfig.column === column) {
@@ -614,30 +664,235 @@ document.addEventListener("DOMContentLoaded", function () {
       sortConfig.direction = "asc";
     }
 
-    filteredData.sort((a, b) => {
-      const valA =
-        a[column] !== undefined && a[column] !== null ? a[column] : "";
-      const valB =
-        b[column] !== undefined && b[column] !== null ? b[column] : "";
+    // Set global sort active
+    globalSortActive = true;
 
-      // Check if values can be converted to numbers
-      const numA = parseFloat(valA);
-      const numB = parseFloat(valB);
+    // Helper function to sort array by column
+    function sortArrayByColumn(array, sortColumn, direction) {
+      return [...array].sort((a, b) => {
+        const valA =
+          a[sortColumn] !== undefined && a[sortColumn] !== null
+            ? a[sortColumn]
+            : "";
+        const valB =
+          b[sortColumn] !== undefined && b[sortColumn] !== null
+            ? b[sortColumn]
+            : "";
 
-      let comparison = 0;
-      if (!isNaN(numA) && !isNaN(numB)) {
-        // Sort numerically
-        comparison = numA - numB;
-      } else {
-        // Sort alphabetically
-        comparison = String(valA).localeCompare(String(valB));
+        // Check if values can be converted to numbers
+        const numA = parseFloat(valA);
+        const numB = parseFloat(valB);
+
+        let comparison = 0;
+        if (!isNaN(numA) && !isNaN(numB)) {
+          // Sort numerically
+          comparison = numA - numB;
+        } else {
+          // Sort alphabetically
+          comparison = String(valA).localeCompare(String(valB));
+        }
+
+        return direction === "asc" ? comparison : -comparison;
+      });
+    }
+
+    // First, sort the current tab by the selected column
+    sortedExcelData[currentTab] = sortArrayByColumn(
+      excelData[currentTab],
+      column,
+      sortConfig.direction
+    );
+
+    // Create a relationship mapping based on SAMA's Case Serial Number or similar ID fields
+    const relationshipMap = new Map();
+    const keyFieldsList = [
+      "SAMA's Case Serial Number",
+      "SAMA Case Serial Number",
+      "SAMA Case ID",
+      "Case Serial Number",
+      "SAMA Case Number",
+      "SAMA ID",
+      "Client's National/Residency/Commercial ID",
+      "Transaction ID (Unique)",
+      "E-Services Session ID",
+    ];
+
+    // Find which key field exists in the current tab
+    let keyField = null;
+    for (const field of keyFieldsList) {
+      if (sortedExcelData[currentTab].some((row) => row[field] !== undefined)) {
+        keyField = field;
+        break;
       }
+    }
 
-      return sortConfig.direction === "asc" ? comparison : -comparison;
-    });
+    // If we found a key field, build a relationship map
+    if (keyField) {
+      // Build a map of order positions by ID
+      sortedExcelData[currentTab].forEach((row, index) => {
+        if (
+          row[keyField] !== undefined &&
+          row[keyField] !== null &&
+          row[keyField] !== ""
+        ) {
+          relationshipMap.set(String(row[keyField]), index);
+        }
+      });
+
+      // Sort other tabs based on the relationship map
+      Object.keys(excelData).forEach((tabName) => {
+        if (
+          tabName !== currentTab &&
+          excelData[tabName] &&
+          excelData[tabName].length > 0
+        ) {
+          let keyFieldInTab = null;
+
+          // Find which key field exists in this tab
+          for (const field of keyFieldsList) {
+            if (excelData[tabName].some((row) => row[field] !== undefined)) {
+              keyFieldInTab = field;
+              break;
+            }
+          }
+
+          if (keyFieldInTab) {
+            // Sort this tab according to the relationship map
+            sortedExcelData[tabName] = [...excelData[tabName]].sort((a, b) => {
+              const aVal =
+                a[keyFieldInTab] !== undefined && a[keyFieldInTab] !== null
+                  ? String(a[keyFieldInTab])
+                  : "";
+              const bVal =
+                b[keyFieldInTab] !== undefined && b[keyFieldInTab] !== null
+                  ? String(b[keyFieldInTab])
+                  : "";
+
+              const aPos = relationshipMap.has(aVal)
+                ? relationshipMap.get(aVal)
+                : Number.MAX_SAFE_INTEGER;
+              const bPos = relationshipMap.has(bVal)
+                ? relationshipMap.get(bVal)
+                : Number.MAX_SAFE_INTEGER;
+
+              // Sort first by relationship
+              if (aPos !== bPos) {
+                return aPos - bPos;
+              }
+
+              // If no relationship or same position, try to sort by the original column if it exists
+              if (a[column] !== undefined && b[column] !== undefined) {
+                const numA = parseFloat(a[column]);
+                const numB = parseFloat(b[column]);
+
+                if (!isNaN(numA) && !isNaN(numB)) {
+                  return sortConfig.direction === "asc"
+                    ? numA - numB
+                    : numB - numA;
+                } else {
+                  const strComp = String(a[column]).localeCompare(
+                    String(b[column])
+                  );
+                  return sortConfig.direction === "asc" ? strComp : -strComp;
+                }
+              }
+
+              // As a fallback, maintain original order
+              return 0;
+            });
+          } else {
+            // If tab doesn't have a relationship field, sort by the column if it exists
+            if (excelData[tabName].some((row) => row[column] !== undefined)) {
+              sortedExcelData[tabName] = sortArrayByColumn(
+                excelData[tabName],
+                column,
+                sortConfig.direction
+              );
+            } else {
+              // Otherwise keep original order
+              sortedExcelData[tabName] = [...excelData[tabName]];
+            }
+          }
+        }
+      });
+    } else {
+      // Fallback to original approach if no key field is found
+      Object.keys(excelData).forEach((tabName) => {
+        if (
+          tabName !== currentTab &&
+          excelData[tabName] &&
+          excelData[tabName].length > 0
+        ) {
+          if (excelData[tabName].some((row) => row[column] !== undefined)) {
+            sortedExcelData[tabName] = sortArrayByColumn(
+              excelData[tabName],
+              column,
+              sortConfig.direction
+            );
+          } else {
+            sortedExcelData[tabName] = [...excelData[tabName]];
+          }
+        }
+      });
+    }
+
+    // Update current filtered data with sorted data
+    filteredData = sortedExcelData[currentTab] || [];
 
     currentPage = 0;
     renderTable();
+
+    // Update UI to show global sort is active
+    updateGlobalSortIndicator(true, column, keyField);
+  }
+
+  // New: Update UI to show global sort is active
+  function updateGlobalSortIndicator(isActive, column, relationshipField) {
+    // Remove any existing indicator
+    const existingIndicator = document.getElementById("globalSortIndicator");
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    if (isActive) {
+      // Add indicator next to clear filters button
+      const indicator = document.createElement("div");
+      indicator.id = "globalSortIndicator";
+      indicator.className = "global-sort-indicator";
+
+      let indicatorText = `Global sort by "${column}" ${
+        sortConfig.direction === "asc" ? "↑" : "↓"
+      }`;
+      if (relationshipField) {
+        indicatorText += ` (preserving relationships by ${relationshipField})`;
+      }
+      indicator.innerHTML = indicatorText + " active";
+
+      // Add a style tag if not already present
+      if (!document.getElementById("globalSortStyles")) {
+        const style = document.createElement("style");
+        style.id = "globalSortStyles";
+        style.textContent = `
+          .global-sort-indicator {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            font-size: 0.85rem;
+            font-weight: bold;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // Insert after clear filters button
+      clearFiltersBtn.parentNode.insertBefore(
+        indicator,
+        clearFiltersBtn.nextSibling
+      );
+    }
   }
 
   function detectDateColumn(columnName) {
@@ -979,12 +1234,15 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function applyFilters() {
-    // Start with all data from current tab
-    let filtered = excelData[currentTab] || [];
+    // Get data source based on global sort status
+    let sourceData =
+      globalSortActive && sortedExcelData[currentTab]
+        ? sortedExcelData[currentTab]
+        : excelData[currentTab] || [];
 
     // Apply active filters
     if (Object.keys(activeFilters).length > 0) {
-      filtered = filtered.filter((row) => {
+      filtered = sourceData.filter((row) => {
         return Object.entries(activeFilters).every(([column, filter]) => {
           // Skip if column doesn't exist in this row
           if (row[column] === undefined) return false;
@@ -1039,6 +1297,8 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         });
       });
+    } else {
+      filtered = sourceData;
     }
 
     // Apply search
@@ -1060,8 +1320,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getUniqueColumnValues(column) {
+    // Use the appropriate data source based on global sort status
+    const sourceData =
+      globalSortActive && sortedExcelData[currentTab]
+        ? sortedExcelData[currentTab]
+        : excelData[currentTab];
+
     const values = new Set();
-    excelData[currentTab].forEach((row) => {
+    sourceData.forEach((row) => {
       if (row[column] !== undefined) {
         values.add(String(row[column]));
       }
@@ -1075,6 +1341,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Clear all active filters
     activeFilters = {};
+
+    // Reset global sort flag and clear sorted data
+    globalSortActive = false;
+    resetSortedData();
+
+    // Reset sort config
+    sortConfig = { column: null, direction: "asc" };
+
+    // Remove global sort indicator
+    updateGlobalSortIndicator(false);
 
     // Reset to full data for current tab
     filteredData = excelData[currentTab] || [];
