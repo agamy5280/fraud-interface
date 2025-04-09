@@ -847,6 +847,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // New: Update UI to show global sort is active
+  // Updated: Update UI to show global sort is active with fixed position
+  // Updated: Update UI to show global sort is active with fixed position
   function updateGlobalSortIndicator(isActive, column, relationshipField) {
     // Remove any existing indicator
     const existingIndicator = document.getElementById("globalSortIndicator");
@@ -855,7 +857,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (isActive) {
-      // Add indicator next to clear filters button
+      // Create a fixed container for the indicator
       const indicator = document.createElement("div");
       indicator.id = "globalSortIndicator";
       indicator.className = "global-sort-indicator";
@@ -873,25 +875,40 @@ document.addEventListener("DOMContentLoaded", function () {
         const style = document.createElement("style");
         style.id = "globalSortStyles";
         style.textContent = `
-          .global-sort-indicator {
-            display: inline-block;
-            margin-left: 10px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            background-color: #e3f2fd;
-            color: #0d47a1;
-            font-size: 0.85rem;
-            font-weight: bold;
-          }
-        `;
+        .global-sort-indicator {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 4px;
+          background-color: #e3f2fd;
+          color: #0d47a1;
+          font-size: 0.85rem;
+          font-weight: bold;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 1001;
+          text-align: center;
+          padding: 10px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Add padding to body to prevent content from being hidden under the fixed indicator */
+        body.has-global-sort {
+          padding-top: 40px;
+        }
+      `;
         document.head.appendChild(style);
       }
 
-      // Insert after clear filters button
-      clearFiltersBtn.parentNode.insertBefore(
-        indicator,
-        clearFiltersBtn.nextSibling
-      );
+      // Add to body instead of table container so it persists across tab changes
+      document.body.appendChild(indicator);
+
+      // Add class to body for padding
+      document.body.classList.add("has-global-sort");
+    } else {
+      // Remove body class when indicator is removed
+      document.body.classList.remove("has-global-sort");
     }
   }
 

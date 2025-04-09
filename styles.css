@@ -17,7 +17,7 @@ body {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 95%;
   margin: 0 auto;
   padding: 20px;
 }
@@ -82,6 +82,8 @@ h1 {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background-color: white;
+  width: 100%;
+  max-width: 100%;
 }
 
 table {
@@ -325,7 +327,9 @@ tbody tr:hover {
 .clear-filters:hover {
   background-color: #e53935;
 }
-
+#clearFiltersBtn {
+  margin-bottom: 10px;
+}
 /* Style for sortable column headers */
 th.sortable {
   position: relative;
