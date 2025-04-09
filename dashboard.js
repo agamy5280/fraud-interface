@@ -845,7 +845,43 @@ document.addEventListener("DOMContentLoaded", function () {
     // Update UI to show global sort is active
     updateGlobalSortIndicator(true, column, keyField);
   }
+  function formatMoneyValue(value) {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
 
+    // Extract the numeric part
+    const numericString = String(value).replace(/[^0-9.-]/g, "");
+    const numValue = parseFloat(numericString);
+
+    // If it's not a valid number, return the original value
+    if (isNaN(numValue)) {
+      return value;
+    }
+
+    // Format the number with comma thousands separators
+    // Preserve decimal places if they exist
+    const parts = numericString.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+    // Check if the original value had currency symbols or text
+    const originalStr = String(value);
+    const hasPrefix = originalStr.match(/^[^\d-]+/);
+    const hasSuffix = originalStr.match(/[^\d.]+$/);
+
+    let formattedValue = parts.join(".");
+
+    // Add back any prefix/suffix (like currency symbols)
+    if (hasPrefix) {
+      formattedValue = hasPrefix[0] + formattedValue;
+    }
+
+    if (hasSuffix) {
+      formattedValue = formattedValue + hasSuffix[0];
+    }
+
+    return formattedValue;
+  }
   // New: Update UI to show global sort is active
   // Updated: Update UI to show global sort is active with fixed position
   // Updated: Update UI to show global sort is active with fixed position
@@ -1467,8 +1503,52 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createResponsiveTables(pageData, columns, startIndex) {
+    // Function to format money values with commas
+    function formatMoneyValue(value, column) {
+      if (value === null || value === undefined || value === "") {
+        return "";
+      }
+
+      // Only format if it's a money column
+      if (!detectAmountColumn(column)) {
+        return escapeHtml(value);
+      }
+
+      // Extract the numeric part
+      const numericString = String(value).replace(/[^0-9.-]/g, "");
+      const numValue = parseFloat(numericString);
+
+      // If it's not a valid number, return the original escaped value
+      if (isNaN(numValue)) {
+        return escapeHtml(value);
+      }
+
+      // Format the number with comma thousands separators
+      // Preserve decimal places if they exist
+      const parts = numericString.split(".");
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+      // Check if the original value had currency symbols or text
+      const originalStr = String(value);
+      const hasPrefix = originalStr.match(/^[^\d-]+/);
+      const hasSuffix = originalStr.match(/[^\d.]+$/);
+
+      let formattedValue = parts.join(".");
+
+      // Add back any prefix/suffix (like currency symbols)
+      if (hasPrefix) {
+        formattedValue = hasPrefix[0] + formattedValue;
+      }
+
+      if (hasSuffix) {
+        formattedValue = formattedValue + hasSuffix[0];
+      }
+
+      return escapeHtml(formattedValue);
+    }
+
     if (window.innerWidth <= 768) {
-      // Add a filter row at the top for mobile
+      // Mobile view
       let tableHTML = '<div class="mobile-filters">';
 
       // Add dropdown selector for columns
@@ -1495,9 +1575,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         columns.forEach((column) => {
           const cellValue = row[column];
+          // Apply formatting for money columns
           const displayValue =
             cellValue !== undefined && cellValue !== null
-              ? escapeHtml(cellValue)
+              ? formatMoneyValue(cellValue, column)
               : "";
 
           if (isClickable(column, cellValue)) {
@@ -1554,6 +1635,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }, 0);
     } else {
+      // Desktop view
       let tableHTML = `
   <table>
       <thead>
@@ -1589,7 +1671,7 @@ document.addEventListener("DOMContentLoaded", function () {
           </tr>
       </thead>
       <tbody>
-`;
+  `;
 
       pageData.forEach((row, rowIndex) => {
         const actualRowIndex = startIndex + rowIndex;
@@ -1597,9 +1679,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         columns.forEach((column) => {
           const cellValue = row[column];
+          // Apply formatting for money columns
           const displayValue =
             cellValue !== undefined && cellValue !== null
-              ? escapeHtml(cellValue)
+              ? formatMoneyValue(cellValue, column)
               : "";
 
           if (isClickable(column, cellValue)) {
