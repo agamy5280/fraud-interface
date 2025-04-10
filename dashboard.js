@@ -48,6 +48,16 @@ document.addEventListener("DOMContentLoaded", function () {
     cards: {},
   };
 
+  let globalFilterActive = false;
+  let filteredExcelData = {
+    fraudCases: null,
+    clientInfo: null,
+    accountInfo: null,
+    directChannel: null,
+    bankServices: null,
+    cards: null,
+  };
+
   // Define important columns for each tab for filtering
   const keyColumnsForFiltering = {
     fraudCases: [
@@ -139,6 +149,14 @@ document.addEventListener("DOMContentLoaded", function () {
     },
   };
 
+  // Add this at the beginning of your code, after the variable declarations
+  const rowHighlightColors = [
+    { background: "#f5f5f5", textColor: "#333333" }, // Light gray
+    { background: "#e0e0e0", textColor: "#333333" }, // Medium gray
+    { background: "#f0f8ff", textColor: "#333333" }, // Alice blue
+    { background: "#f0fff0", textColor: "#333333" }, // Honeydew
+  ];
+
   // DOM elements
   const fileUpload = document.getElementById("fileUpload");
   const searchInput = document.getElementById("searchInput");
@@ -151,6 +169,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const pageButtons = document.getElementById("pageButtons");
   const rowsPerPageSelect = document.getElementById("rowsPerPageSelect");
   const clearFiltersBtn = document.getElementById("clearFiltersBtn");
+  // Hide the clear button by default on page load
+  clearFiltersBtn.style.display = "none";
 
   // Event Listeners
   fileUpload.addEventListener("change", handleFileUpload);
@@ -188,6 +208,12 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   clearFiltersBtn.addEventListener("click", clearAllFilters);
+
+  function resetFilteredData() {
+    Object.keys(filteredExcelData).forEach((key) => {
+      filteredExcelData[key] = null;
+    });
+  }
 
   // Utility functions
   function normalizeColumnName(columnName) {
@@ -309,6 +335,105 @@ document.addEventListener("DOMContentLoaded", function () {
     reader.readAsBinaryString(file);
   }
 
+  function highlightRelatedRows() {
+    // Get all table rows
+    const rows = document.querySelectorAll(
+      "#tableContainer tr[data-row-index]"
+    );
+    if (!rows.length) return;
+
+    // Possible SAMA ID field names
+    const possibleSamaIdFields = [
+      "SAMA's Case Serial Number",
+      "SAMA Case Serial Number",
+      "SAMA Case ID",
+      "SAMA ID",
+      "Case Serial Number",
+    ];
+
+    // Find which SAMA ID field exists in the current data
+    let samaIdField = null;
+    for (const field of possibleSamaIdFields) {
+      const headerCell = document.querySelector(`th[data-column="${field}"]`);
+      if (headerCell) {
+        samaIdField = field;
+        break;
+      }
+    }
+
+    // If no SAMA ID field is found in the current tab, exit
+    if (!samaIdField) return;
+
+    // Map to track SAMA IDs and their assigned colors
+    const samaIdColorMap = new Map();
+    let colorIndex = 0;
+
+    // First pass: identify all unique SAMA IDs
+    rows.forEach((row) => {
+      const rowIndex = row.getAttribute("data-row-index");
+      if (!rowIndex) return;
+
+      // Find the SAMA ID cell
+      let samaIdValue = null;
+      for (let i = 0; i < row.cells.length; i++) {
+        const headerCell = document.querySelector(`th:nth-child(${i + 1})`);
+        if (
+          headerCell &&
+          headerCell.getAttribute("data-column") === samaIdField
+        ) {
+          const cell = row.cells[i];
+          // Extract text value, handling clickable links
+          samaIdValue = cell.textContent.trim().replace(" ↗", "");
+          break;
+        }
+      }
+
+      // Skip if no SAMA ID found or empty
+      if (!samaIdValue || samaIdValue === "") return;
+
+      // Assign color if not already assigned
+      if (!samaIdColorMap.has(samaIdValue)) {
+        samaIdColorMap.set(
+          samaIdValue,
+          rowHighlightColors[colorIndex % rowHighlightColors.length]
+        );
+        colorIndex++;
+      }
+    });
+
+    // Second pass: apply colors
+    rows.forEach((row) => {
+      const rowIndex = row.getAttribute("data-row-index");
+      if (!rowIndex) return;
+
+      // Find the SAMA ID cell again
+      let samaIdValue = null;
+      for (let i = 0; i < row.cells.length; i++) {
+        const headerCell = document.querySelector(`th:nth-child(${i + 1})`);
+        if (
+          headerCell &&
+          headerCell.getAttribute("data-column") === samaIdField
+        ) {
+          const cell = row.cells[i];
+          samaIdValue = cell.textContent.trim().replace(" ↗", "");
+          break;
+        }
+      }
+
+      // Apply color if SAMA ID has an assigned color
+      if (samaIdValue && samaIdColorMap.has(samaIdValue)) {
+        const colorStyle = samaIdColorMap.get(samaIdValue);
+        row.style.backgroundColor = colorStyle.background;
+        row.style.color = colorStyle.textColor;
+
+        // Also apply a subtle border to better separate groups
+        row.style.borderBottom = `1px solid ${
+          colorStyle.background === "#f5f5f5" ? "#d0d0d0" : "#e6e6e6"
+        }`;
+      }
+    });
+  }
+
   // New: Function to reset sorted data
   function resetSortedData() {
     Object.keys(sortedExcelData).forEach((key) => {
@@ -381,18 +506,23 @@ document.addEventListener("DOMContentLoaded", function () {
   function handleSearch() {
     const searchText = searchInput.value.trim().toLowerCase();
 
-    // Reset activeFilters when performing a new search
-    activeFilters = {};
-
-    // Get source data based on whether we have sorted data or not
-    const sourceData =
-      globalSortActive && sortedExcelData[currentTab]
-        ? sortedExcelData[currentTab]
-        : excelData[currentTab] || [];
+    // Get source data based on the current state
+    let sourceData;
+    if (globalFilterActive && globalSortActive) {
+      sourceData = sortedExcelData[currentTab] || [];
+    } else if (globalFilterActive) {
+      sourceData = filteredExcelData[currentTab] || [];
+    } else if (globalSortActive) {
+      sourceData = sortedExcelData[currentTab] || [];
+    } else {
+      sourceData = excelData[currentTab] || [];
+    }
 
     if (!searchText) {
+      // If search is cleared, return to the filtered/sorted/original data
       filteredData = sourceData;
     } else {
+      // Apply search on the appropriate data source
       filteredData = sourceData.filter((row) => {
         return Object.values(row).some(
           (value) =>
@@ -405,6 +535,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     currentPage = 0;
     renderTable();
+
+    // Update the clear button text and visibility
+    updateClearAllButton();
   }
 
   function changeTab(tabName) {
@@ -418,13 +551,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
     currentTab = tabName;
 
-    // Reset filters but keep sortConfig when changing tabs
-    activeFilters = {};
-
-    // Use sorted data if global sort is active, otherwise use original data
-    if (globalSortActive && sortedExcelData[tabName]) {
-      filteredData = sortedExcelData[tabName];
+    // Determine which data source to use based on active modes
+    if (globalFilterActive && globalSortActive) {
+      // Both sorting and filtering are active, use sortedExcelData which contains the sorted-filtered data
+      filteredData = sortedExcelData[tabName] || [];
+    } else if (globalFilterActive) {
+      // Only filtering is active
+      filteredData = filteredExcelData[tabName] || [];
+    } else if (globalSortActive) {
+      // Only sorting is active
+      filteredData = sortedExcelData[tabName] || [];
     } else {
+      // Neither is active, use original data
       filteredData = excelData[tabName] || [];
     }
 
@@ -696,9 +834,18 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
+    // Determine which data source to use for each tab - original or filtered
+    const getTabDataSource = (tabName) => {
+      if (globalFilterActive && filteredExcelData[tabName]) {
+        return filteredExcelData[tabName];
+      }
+      return excelData[tabName];
+    };
+
     // First, sort the current tab by the selected column
+    const currentTabSource = getTabDataSource(currentTab);
     sortedExcelData[currentTab] = sortArrayByColumn(
-      excelData[currentTab],
+      currentTabSource,
       column,
       sortConfig.direction
     );
@@ -757,8 +904,11 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           if (keyFieldInTab) {
+            // Get the appropriate data source for this tab
+            const tabDataSource = getTabDataSource(tabName);
+
             // Sort this tab according to the relationship map
-            sortedExcelData[tabName] = [...excelData[tabName]].sort((a, b) => {
+            sortedExcelData[tabName] = [...tabDataSource].sort((a, b) => {
               const aVal =
                 a[keyFieldInTab] !== undefined && a[keyFieldInTab] !== null
                   ? String(a[keyFieldInTab])
@@ -801,16 +951,19 @@ document.addEventListener("DOMContentLoaded", function () {
               return 0;
             });
           } else {
+            // Get the appropriate data source for this tab
+            const tabDataSource = getTabDataSource(tabName);
+
             // If tab doesn't have a relationship field, sort by the column if it exists
-            if (excelData[tabName].some((row) => row[column] !== undefined)) {
+            if (tabDataSource.some((row) => row[column] !== undefined)) {
               sortedExcelData[tabName] = sortArrayByColumn(
-                excelData[tabName],
+                tabDataSource,
                 column,
                 sortConfig.direction
               );
             } else {
               // Otherwise keep original order
-              sortedExcelData[tabName] = [...excelData[tabName]];
+              sortedExcelData[tabName] = [...tabDataSource];
             }
           }
         }
@@ -823,28 +976,38 @@ document.addEventListener("DOMContentLoaded", function () {
           excelData[tabName] &&
           excelData[tabName].length > 0
         ) {
-          if (excelData[tabName].some((row) => row[column] !== undefined)) {
+          // Get the appropriate data source for this tab
+          const tabDataSource = getTabDataSource(tabName);
+
+          if (tabDataSource.some((row) => row[column] !== undefined)) {
             sortedExcelData[tabName] = sortArrayByColumn(
-              excelData[tabName],
+              tabDataSource,
               column,
               sortConfig.direction
             );
           } else {
-            sortedExcelData[tabName] = [...excelData[tabName]];
+            sortedExcelData[tabName] = [...tabDataSource];
           }
         }
       });
     }
 
     // Update current filtered data with sorted data
-    filteredData = sortedExcelData[currentTab] || [];
+    if (globalFilterActive) {
+      // If global filtering is active, we need to update filteredData to show sorted and filtered data
+      filteredData = sortedExcelData[currentTab] || [];
+    } else {
+      filteredData = sortedExcelData[currentTab] || [];
+    }
 
     currentPage = 0;
     renderTable();
 
     // Update UI to show global sort is active
     updateGlobalSortIndicator(true, column, keyField);
+    updateClearAllButton();
   }
+
   function formatMoneyValue(value) {
     if (value === null || value === undefined || value === "") {
       return "";
@@ -886,66 +1049,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // Updated: Update UI to show global sort is active with fixed position
   // Updated: Update UI to show global sort is active with fixed position
   function updateGlobalSortIndicator(isActive, column, relationshipField) {
-    // Remove any existing indicator
-    const existingIndicator = document.getElementById("globalSortIndicator");
-    if (existingIndicator) {
-      existingIndicator.remove();
-    }
+    // Update the global sort active flag
+    globalSortActive = isActive;
 
-    if (isActive) {
-      // Create a fixed container for the indicator
-      const indicator = document.createElement("div");
-      indicator.id = "globalSortIndicator";
-      indicator.className = "global-sort-indicator";
-
-      let indicatorText = `Global sort by "${column}" ${
-        sortConfig.direction === "asc" ? "↑" : "↓"
-      }`;
-      if (relationshipField) {
-        indicatorText += ` (preserving relationships by ${relationshipField})`;
-      }
-      indicator.innerHTML = indicatorText + " active";
-
-      // Add a style tag if not already present
-      if (!document.getElementById("globalSortStyles")) {
-        const style = document.createElement("style");
-        style.id = "globalSortStyles";
-        style.textContent = `
-        .global-sort-indicator {
-          display: inline-block;
-          padding: 2px 8px;
-          border-radius: 4px;
-          background-color: #e3f2fd;
-          color: #0d47a1;
-          font-size: 0.85rem;
-          font-weight: bold;
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 1001;
-          text-align: center;
-          padding: 10px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        /* Add padding to body to prevent content from being hidden under the fixed indicator */
-        body.has-global-sort {
-          padding-top: 40px;
-        }
-      `;
-        document.head.appendChild(style);
-      }
-
-      // Add to body instead of table container so it persists across tab changes
-      document.body.appendChild(indicator);
-
-      // Add class to body for padding
-      document.body.classList.add("has-global-sort");
-    } else {
-      // Remove body class when indicator is removed
-      document.body.classList.remove("has-global-sort");
-    }
+    // Call the combined indicator update
+    updateGlobalIndicator();
   }
 
   function detectDateColumn(columnName) {
@@ -1287,7 +1395,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function applyFilters() {
-    // Get data source based on global sort status
+    // Determine which data source to use - original or sorted
     let sourceData =
       globalSortActive && sortedExcelData[currentTab]
         ? sortedExcelData[currentTab]
@@ -1295,7 +1403,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Apply active filters
     if (Object.keys(activeFilters).length > 0) {
-      filtered = sourceData.filter((row) => {
+      const filtered = sourceData.filter((row) => {
         return Object.entries(activeFilters).every(([column, filter]) => {
           // Skip if column doesn't exist in this row
           if (row[column] === undefined) return false;
@@ -1350,14 +1458,348 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         });
       });
+
+      filteredExcelData[currentTab] = filtered;
+      globalFilterActive = true;
+
+      // Create a relationship mapping based on SAMA's Case Serial Number or similar ID fields
+      const relationshipMap = new Map();
+      const keyFieldsList = [
+        "SAMA's Case Serial Number",
+        "SAMA Case Serial Number",
+        "SAMA Case ID",
+        "Case Serial Number",
+        "SAMA Case Number",
+        "SAMA ID",
+        "Client's National/Residency/Commercial ID",
+        "Transaction ID (Unique)",
+        "E-Services Session ID",
+      ];
+
+      // Find which key field exists in the current tab
+      let keyField = null;
+      for (const field of keyFieldsList) {
+        if (filtered.some((row) => row[field] !== undefined)) {
+          keyField = field;
+          break;
+        }
+      }
+
+      // If we found a key field, build a relationship map
+      if (keyField) {
+        // Build a set of key values that should be included
+        const keyValuesSet = new Set();
+        filtered.forEach((row) => {
+          if (
+            row[keyField] !== undefined &&
+            row[keyField] !== null &&
+            row[keyField] !== ""
+          ) {
+            keyValuesSet.add(String(row[keyField]));
+          }
+        });
+
+        // Filter other tabs based on the relationship
+        Object.keys(excelData).forEach((tabName) => {
+          if (
+            tabName !== currentTab &&
+            excelData[tabName] &&
+            excelData[tabName].length > 0
+          ) {
+            let keyFieldInTab = null;
+
+            // Find which key field exists in this tab
+            for (const field of keyFieldsList) {
+              if (excelData[tabName].some((row) => row[field] !== undefined)) {
+                keyFieldInTab = field;
+                break;
+              }
+            }
+
+            if (keyFieldInTab) {
+              // Select source data based on whether global sorting is active
+              const sourceForTab =
+                globalSortActive && sortedExcelData[tabName]
+                  ? sortedExcelData[tabName]
+                  : excelData[tabName];
+
+              filteredExcelData[tabName] = sourceForTab.filter((row) => {
+                const rowKeyValue = row[keyFieldInTab];
+                if (
+                  rowKeyValue === undefined ||
+                  rowKeyValue === null ||
+                  rowKeyValue === ""
+                ) {
+                  return false;
+                }
+                return keyValuesSet.has(String(rowKeyValue));
+              });
+            } else {
+              // If tab doesn't have a relationship field, apply the same filter if columns exist
+              const sourceForTab =
+                globalSortActive && sortedExcelData[tabName]
+                  ? sortedExcelData[tabName]
+                  : excelData[tabName];
+
+              filteredExcelData[tabName] = sourceForTab.filter((row) => {
+                return Object.entries(activeFilters).every(
+                  ([column, filter]) => {
+                    // Skip this filter condition if column doesn't exist in this tab
+                    if (row[column] === undefined) return true;
+
+                    // Apply the filter logic
+                    if (
+                      filter &&
+                      typeof filter === "object" &&
+                      !Array.isArray(filter)
+                    ) {
+                      if (filter.type === "amountRange") {
+                        let rowValue = row[column];
+                        let numericString = String(rowValue).replace(
+                          /[^0-9.-]/g,
+                          ""
+                        );
+                        let numValue = parseFloat(numericString);
+                        if (isNaN(numValue)) return false;
+                        if (filter.min !== null && numValue < filter.min)
+                          return false;
+                        if (filter.max !== null && numValue > filter.max)
+                          return false;
+                        return true;
+                      } else if (filter.type === "dateRange") {
+                        // Date range filter logic
+                        let rowValue = row[column];
+                        let rowDate;
+                        if (typeof rowValue === "number") {
+                          rowDate = new Date(
+                            Math.round((rowValue - 25569) * 86400 * 1000)
+                          );
+                        } else {
+                          rowDate = new Date(rowValue);
+                        }
+                        if (isNaN(rowDate.getTime())) return false;
+                        if (filter.from && rowDate < filter.from) return false;
+                        if (filter.to && rowDate > filter.to) return false;
+                        return true;
+                      }
+                      return false;
+                    } else if (Array.isArray(filter)) {
+                      const rowValueStr = String(row[column] || "");
+                      return filter.includes(rowValueStr);
+                    } else {
+                      return String(row[column]) === String(filter);
+                    }
+                  }
+                );
+              });
+            }
+          }
+        });
+      } else {
+        // No key field found, just apply filters directly to other tabs where columns exist
+        Object.keys(excelData).forEach((tabName) => {
+          if (
+            tabName !== currentTab &&
+            excelData[tabName] &&
+            excelData[tabName].length > 0
+          ) {
+            const sourceForTab =
+              globalSortActive && sortedExcelData[tabName]
+                ? sortedExcelData[tabName]
+                : excelData[tabName];
+
+            filteredExcelData[tabName] = sourceForTab.filter((row) => {
+              return Object.entries(activeFilters).every(([column, filter]) => {
+                // Skip this filter condition if column doesn't exist in this tab
+                if (row[column] === undefined) return true;
+
+                // Apply the filter logic
+                if (
+                  filter &&
+                  typeof filter === "object" &&
+                  !Array.isArray(filter)
+                ) {
+                  if (filter.type === "amountRange") {
+                    let rowValue = row[column];
+                    let numericString = String(rowValue).replace(
+                      /[^0-9.-]/g,
+                      ""
+                    );
+                    let numValue = parseFloat(numericString);
+                    if (isNaN(numValue)) return false;
+                    if (filter.min !== null && numValue < filter.min)
+                      return false;
+                    if (filter.max !== null && numValue > filter.max)
+                      return false;
+                    return true;
+                  } else if (filter.type === "dateRange") {
+                    // Date range filter logic
+                    let rowValue = row[column];
+                    let rowDate;
+                    if (typeof rowValue === "number") {
+                      rowDate = new Date(
+                        Math.round((rowValue - 25569) * 86400 * 1000)
+                      );
+                    } else {
+                      rowDate = new Date(rowValue);
+                    }
+                    if (isNaN(rowDate.getTime())) return false;
+                    if (filter.from && rowDate < filter.from) return false;
+                    if (filter.to && rowDate > filter.to) return false;
+                    return true;
+                  }
+                  return false;
+                } else if (Array.isArray(filter)) {
+                  const rowValueStr = String(row[column] || "");
+                  return filter.includes(rowValueStr);
+                } else {
+                  return String(row[column]) === String(filter);
+                }
+              });
+            });
+          }
+        });
+      }
+
+      // Update the global filter indicator
+      updateGlobalFilterIndicator(true, keyField);
+
+      // If global sort is also active, we need to re-sort the filtered data
+      if (globalSortActive && sortConfig.column) {
+        // Re-sort all filtered data based on current sortConfig
+        Object.keys(filteredExcelData).forEach((tabName) => {
+          if (
+            filteredExcelData[tabName] &&
+            filteredExcelData[tabName].length > 0
+          ) {
+            // This preserves the filters but applies the sort
+            sortedExcelData[tabName] = [...filteredExcelData[tabName]];
+          }
+        });
+
+        // Re-sort using the same relationship logic as in sortData
+        if (keyField && sortConfig.column) {
+          const sortColumn = sortConfig.column;
+          const direction = sortConfig.direction;
+
+          // Sort the current tab first
+          sortedExcelData[currentTab] = [...filteredExcelData[currentTab]].sort(
+            (a, b) => {
+              const valA = a[sortColumn] !== undefined ? a[sortColumn] : "";
+              const valB = b[sortColumn] !== undefined ? b[sortColumn] : "";
+
+              const numA = parseFloat(valA);
+              const numB = parseFloat(valB);
+
+              if (!isNaN(numA) && !isNaN(numB)) {
+                return direction === "asc" ? numA - numB : numB - numA;
+              } else {
+                const comp = String(valA).localeCompare(String(valB));
+                return direction === "asc" ? comp : -comp;
+              }
+            }
+          );
+
+          // Rebuild relationship map from the sorted+filtered current tab
+          const sortRelationshipMap = new Map();
+          sortedExcelData[currentTab].forEach((row, index) => {
+            if (
+              row[keyField] !== undefined &&
+              row[keyField] !== null &&
+              row[keyField] !== ""
+            ) {
+              sortRelationshipMap.set(String(row[keyField]), index);
+            }
+          });
+
+          // Apply relationship-based sorting to other tabs
+          Object.keys(filteredExcelData).forEach((tabName) => {
+            if (
+              tabName !== currentTab &&
+              filteredExcelData[tabName] &&
+              filteredExcelData[tabName].length > 0
+            ) {
+              let keyFieldInTab = null;
+
+              for (const field of keyFieldsList) {
+                if (
+                  filteredExcelData[tabName].some(
+                    (row) => row[field] !== undefined
+                  )
+                ) {
+                  keyFieldInTab = field;
+                  break;
+                }
+              }
+
+              if (keyFieldInTab) {
+                sortedExcelData[tabName] = [...filteredExcelData[tabName]].sort(
+                  (a, b) => {
+                    const aVal =
+                      a[keyFieldInTab] !== undefined
+                        ? String(a[keyFieldInTab])
+                        : "";
+                    const bVal =
+                      b[keyFieldInTab] !== undefined
+                        ? String(b[keyFieldInTab])
+                        : "";
+
+                    const aPos = sortRelationshipMap.has(aVal)
+                      ? sortRelationshipMap.get(aVal)
+                      : Number.MAX_SAFE_INTEGER;
+                    const bPos = sortRelationshipMap.has(bVal)
+                      ? sortRelationshipMap.get(bVal)
+                      : Number.MAX_SAFE_INTEGER;
+
+                    if (aPos !== bPos) {
+                      return aPos - bPos;
+                    }
+
+                    if (
+                      a[sortColumn] !== undefined &&
+                      b[sortColumn] !== undefined
+                    ) {
+                      const numA = parseFloat(a[sortColumn]);
+                      const numB = parseFloat(b[sortColumn]);
+
+                      if (!isNaN(numA) && !isNaN(numB)) {
+                        return direction === "asc" ? numA - numB : numB - numA;
+                      } else {
+                        const strComp = String(a[sortColumn]).localeCompare(
+                          String(b[sortColumn])
+                        );
+                        return direction === "asc" ? strComp : -strComp;
+                      }
+                    }
+
+                    return 0;
+                  }
+                );
+              }
+            }
+          });
+        }
+      }
     } else {
-      filtered = sourceData;
+      // No active filters
+      if (globalSortActive) {
+        // If global sort is active but no filters, use sorted data
+        filteredExcelData = sortedExcelData;
+      } else {
+        // Reset filtered data to original data
+        Object.keys(filteredExcelData).forEach((key) => {
+          filteredExcelData[key] = excelData[key] || [];
+        });
+      }
+      globalFilterActive = false;
+      updateGlobalFilterIndicator(false);
     }
 
     // Apply search
     const searchText = searchInput.value.trim().toLowerCase();
     if (searchText) {
-      filtered = filtered.filter((row) => {
+      // Apply search on top of filtered/sorted data
+      filteredData = filteredExcelData[currentTab].filter((row) => {
         return Object.values(row).some(
           (value) =>
             value !== null &&
@@ -1365,11 +1807,238 @@ document.addEventListener("DOMContentLoaded", function () {
             String(value).toLowerCase().includes(searchText)
         );
       });
+    } else {
+      // Use the appropriate filtered and/or sorted data
+      if (globalFilterActive && globalSortActive) {
+        // Both active - use sorted version of filtered data
+        filteredData = sortedExcelData[currentTab];
+      } else if (globalFilterActive) {
+        // Only filtering active
+        filteredData = filteredExcelData[currentTab];
+      } else if (globalSortActive) {
+        // Only sorting active
+        filteredData = sortedExcelData[currentTab];
+      } else {
+        // Nothing active
+        filteredData = excelData[currentTab];
+      }
     }
 
-    filteredData = filtered;
     currentPage = 0;
     renderTable();
+    updateClearAllButton();
+  }
+
+  function setupEventListeners() {
+    // Replace your existing listener for clearFiltersBtn
+    clearFiltersBtn.addEventListener("click", clearAllFilters);
+
+    // Initialize the button text on page load
+    updateClearAllButton();
+  }
+
+  function updateGlobalFilterIndicator(isActive, relationshipField) {
+    // Update the global filter active flag
+    globalFilterActive = isActive;
+
+    // Call the combined indicator update
+    updateGlobalIndicator();
+  }
+
+  function updateClearAllButton() {
+    const clearFiltersBtn = document.getElementById("clearFiltersBtn");
+    if (!clearFiltersBtn) return;
+
+    // Check if search is active
+    const searchActive = searchInput && searchInput.value.trim() !== "";
+
+    // Determine button text based on active operations
+    if (globalSortActive && globalFilterActive && searchActive) {
+      clearFiltersBtn.textContent = "Clear All (Sorting, Filtering & Search)";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (globalSortActive && globalFilterActive) {
+      clearFiltersBtn.textContent = "Clear All Sorting & Filtering";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (globalSortActive && searchActive) {
+      clearFiltersBtn.textContent = "Clear Sorting & Search";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (globalFilterActive && searchActive) {
+      clearFiltersBtn.textContent = "Clear Filtering & Search";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (globalSortActive) {
+      clearFiltersBtn.textContent = "Clear Sorting";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (globalFilterActive) {
+      clearFiltersBtn.textContent = "Clear Filtering";
+      clearFiltersBtn.style.display = "inline-block";
+    } else if (searchActive) {
+      clearFiltersBtn.textContent = "Clear Search";
+      clearFiltersBtn.style.display = "inline-block";
+    } else {
+      // Hide the button when no operations are active
+      clearFiltersBtn.style.display = "none";
+    }
+  }
+
+  function updateGlobalIndicator() {
+    // Remove any existing indicators
+    const existingIndicator = document.getElementById(
+      "globalCombinedIndicator"
+    );
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // Check if search is active
+    const searchActive = searchInput && searchInput.value.trim() !== "";
+
+    // If none of the operations are active, exit
+    if (!globalSortActive && !globalFilterActive && !searchActive) {
+      document.body.classList.remove("has-global-indicator");
+      return;
+    }
+
+    // Create indicator container
+    const indicator = document.createElement("div");
+    indicator.id = "globalCombinedIndicator";
+    indicator.className = "global-combined-indicator";
+
+    // Build indicator text
+    let indicatorText = "";
+
+    // Add sorting information if active
+    if (globalSortActive && sortConfig.column) {
+      indicatorText += `Global sort by "${sortConfig.column}" ${
+        sortConfig.direction === "asc" ? "↑" : "↓"
+      }`;
+
+      // Check if we have relationship preservation info
+      const keyFieldsList = [
+        "SAMA's Case Serial Number",
+        "SAMA Case Serial Number",
+        "SAMA Case ID",
+        "Case Serial Number",
+        "SAMA Case Number",
+        "SAMA ID",
+        "Client's National/Residency/Commercial ID",
+        "Transaction ID (Unique)",
+        "E-Services Session ID",
+      ];
+
+      // Find which key field exists in the current tab
+      let keyField = null;
+      for (const field of keyFieldsList) {
+        if (
+          sortedExcelData[currentTab] &&
+          sortedExcelData[currentTab].some((row) => row[field] !== undefined)
+        ) {
+          keyField = field;
+          break;
+        }
+      }
+
+      if (keyField) {
+        indicatorText += ` (preserving relationships by ${keyField})`;
+      }
+    }
+
+    // Add filtering information if active
+    if (globalFilterActive && Object.keys(activeFilters).length > 0) {
+      // Add separator if we already added sort info
+      if (indicatorText) {
+        indicatorText += " and filtering by ";
+      } else {
+        indicatorText += "Global filtering by ";
+      }
+
+      // Format filter descriptions
+      const filterDescriptions = [];
+      Object.entries(activeFilters).forEach(([column, filter]) => {
+        if (Array.isArray(filter)) {
+          if (filter.length === 1) {
+            filterDescriptions.push(`${column} = ${filter[0]}`);
+          } else {
+            filterDescriptions.push(
+              `${column} (${filter.length} selected values)`
+            );
+          }
+        } else if (filter && typeof filter === "object") {
+          if (filter.type === "amountRange") {
+            let rangeDesc = `${column} `;
+            if (filter.min !== null && filter.max !== null) {
+              rangeDesc += `between ${filter.min} and ${filter.max}`;
+            } else if (filter.min !== null) {
+              rangeDesc += `≥ ${filter.min}`;
+            } else if (filter.max !== null) {
+              rangeDesc += `≤ ${filter.max}`;
+            }
+            filterDescriptions.push(rangeDesc);
+          } else if (filter.type === "dateRange") {
+            let dateRangeDesc = `${column} `;
+            if (filter.from && filter.to) {
+              dateRangeDesc += `from ${filter.from.toLocaleDateString()} to ${filter.to.toLocaleDateString()}`;
+            } else if (filter.from) {
+              dateRangeDesc += `from ${filter.from.toLocaleDateString()}`;
+            } else if (filter.to) {
+              dateRangeDesc += `until ${filter.to.toLocaleDateString()}`;
+            }
+            filterDescriptions.push(dateRangeDesc);
+          }
+        } else {
+          filterDescriptions.push(`${column} = ${filter}`);
+        }
+      });
+
+      indicatorText += filterDescriptions.join(", ");
+    }
+
+    // Add search information if active
+    if (searchActive) {
+      const searchText = searchInput.value.trim();
+      // Add separator if needed
+      if (indicatorText) {
+        indicatorText += ` and searching for "${searchText}"`;
+      } else {
+        indicatorText += `Searching for "${searchText}"`;
+      }
+    }
+
+    indicator.innerHTML = indicatorText;
+
+    // Add styling if not already present
+    if (!document.getElementById("globalIndicatorStyles")) {
+      const style = document.createElement("style");
+      style.id = "globalIndicatorStyles";
+      style.textContent = `
+        .global-combined-indicator {
+          display: block;
+          padding: 8px 12px;
+          border-radius: 4px;
+          background-color: #e0f7fa;
+          color: #006064;
+          font-size: 0.85rem;
+          font-weight: bold;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 1001;
+          text-align: center;
+          padding: 10px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Add padding to body to prevent content from being hidden under the indicator */
+        body.has-global-indicator {
+          padding-top: 40px;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Add to body
+    document.body.appendChild(indicator);
+    document.body.classList.add("has-global-indicator");
   }
 
   function getUniqueColumnValues(column) {
@@ -1390,25 +2059,34 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function clearAllFilters() {
     // Clear search
-    searchInput.value = "";
+    if (searchInput) {
+      searchInput.value = "";
+    }
 
     // Clear all active filters
     activeFilters = {};
 
-    // Reset global sort flag and clear sorted data
+    // Reset global filter flag and data
+    globalFilterActive = false;
+    resetFilteredData();
+
+    // Reset global sort flag and data
     globalSortActive = false;
     resetSortedData();
 
     // Reset sort config
     sortConfig = { column: null, direction: "asc" };
 
-    // Remove global sort indicator
-    updateGlobalSortIndicator(false);
+    // Update the combined indicator (will remove it since neither flag is active)
+    updateGlobalIndicator();
 
     // Reset to full data for current tab
     filteredData = excelData[currentTab] || [];
     currentPage = 0;
     renderTable();
+
+    // Update clear button text and visibility
+    updateClearAllButton();
   }
 
   function renderTable() {
@@ -1433,6 +2111,9 @@ document.addEventListener("DOMContentLoaded", function () {
     window.currentStart = start;
 
     createResponsiveTables(pageData, columns, start);
+
+    // Add a small timeout to ensure DOM is fully updated before highlighting
+    setTimeout(highlightRelatedRows, 10);
 
     updatePagination(
       start + 1,
@@ -1553,19 +2234,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Add dropdown selector for columns
       tableHTML += `<select id="mobileColumnFilter" class="mobile-column-select">
-                      <option value="">Select column to filter...</option>
-                      ${columns
-                        .map(
-                          (col) =>
-                            `<option value="${escapeHtml(col)}">${escapeHtml(
-                              col
-                            )}</option>`
-                        )
-                        .join("")}
-                    </select>
-                    <button id="mobileFilterBtn" class="mobile-filter-btn">
-                      <i class="fas fa-filter"></i> Filter
-                    </button>`;
+                    <option value="">Select column to filter...</option>
+                    ${columns
+                      .map(
+                        (col) =>
+                          `<option value="${escapeHtml(col)}">${escapeHtml(
+                            col
+                          )}</option>`
+                      )
+                      .join("")}
+                  </select>
+                  <button id="mobileFilterBtn" class="mobile-filter-btn">
+                    <i class="fas fa-filter"></i> Filter
+                  </button>`;
 
       tableHTML += '</div><table class="mobile-table-view"><tbody>';
 
@@ -1589,20 +2270,18 @@ document.addEventListener("DOMContentLoaded", function () {
             );
             if (navTarget) {
               tableHTML += `
-                            <td data-label="${escapeHtml(column)}">
-                                <a href="#" class="clickable" 
-                                    data-to-tab="${escapeHtml(
-                                      navTarget.toTab
-                                    )}" 
-                                    data-link-field="${escapeHtml(
-                                      navTarget.linkField
-                                    )}" 
-                                    data-value="${escapeHtml(navTarget.value)}"
-                                    data-row-index="${actualRowIndex}">
-                                    ${displayValue} ↗
-                                </a>
-                            </td>
-                        `;
+                          <td data-label="${escapeHtml(column)}">
+                              <a href="#" class="clickable" 
+                                  data-to-tab="${escapeHtml(navTarget.toTab)}" 
+                                  data-link-field="${escapeHtml(
+                                    navTarget.linkField
+                                  )}" 
+                                  data-value="${escapeHtml(navTarget.value)}"
+                                  data-row-index="${actualRowIndex}">
+                                  ${displayValue} ↗
+                              </a>
+                          </td>
+                      `;
             } else {
               tableHTML += `<td data-label="${escapeHtml(
                 column
@@ -1633,45 +2312,48 @@ document.addEventListener("DOMContentLoaded", function () {
             }
           });
         }
+
+        // Apply row highlighting
+        highlightRelatedRows();
       }, 0);
     } else {
       // Desktop view
       let tableHTML = `
-  <table>
-      <thead>
-          <tr>
-              ${columns
-                .map((col) => {
-                  const sortIcon =
-                    sortConfig.column === col
-                      ? sortConfig.direction === "asc"
-                        ? " ↑"
-                        : " ↓"
-                      : "";
+<table>
+    <thead>
+        <tr>
+            ${columns
+              .map((col) => {
+                const sortIcon =
+                  sortConfig.column === col
+                    ? sortConfig.direction === "asc"
+                      ? " ↑"
+                      : " ↓"
+                    : "";
 
-                  const filterActiveClass = activeFilters[col] ? "active" : "";
+                const filterActiveClass = activeFilters[col] ? "active" : "";
 
-                  return `
-                      <th class="sortable" data-column="${escapeHtml(col)}">
-                          <div class="column-header">
-                              <span class="column-title">${escapeHtml(
-                                col
-                              )}${sortIcon}</span>
-                              <div class="column-filter-icon ${filterActiveClass}" data-column="${escapeHtml(
-                    col
-                  )}">
-                                  <i class="fas fa-filter" data-column="${escapeHtml(
-                                    col
-                                  )}"></i>
-                              </div>
-                          </div>
-                      </th>`;
-                })
-                .join("")}
-          </tr>
-      </thead>
-      <tbody>
-  `;
+                return `
+                    <th class="sortable" data-column="${escapeHtml(col)}">
+                        <div class="column-header">
+                            <span class="column-title">${escapeHtml(
+                              col
+                            )}${sortIcon}</span>
+                            <div class="column-filter-icon ${filterActiveClass}" data-column="${escapeHtml(
+                  col
+                )}">
+                                <i class="fas fa-filter" data-column="${escapeHtml(
+                                  col
+                                )}"></i>
+                            </div>
+                        </div>
+                    </th>`;
+              })
+              .join("")}
+        </tr>
+    </thead>
+    <tbody>
+`;
 
       pageData.forEach((row, rowIndex) => {
         const actualRowIndex = startIndex + rowIndex;
@@ -1693,20 +2375,18 @@ document.addEventListener("DOMContentLoaded", function () {
             );
             if (navTarget) {
               tableHTML += `
-                            <td>
-                                <a href="#" class="clickable" 
-                                    data-to-tab="${escapeHtml(
-                                      navTarget.toTab
-                                    )}" 
-                                    data-link-field="${escapeHtml(
-                                      navTarget.linkField
-                                    )}" 
-                                    data-value="${escapeHtml(navTarget.value)}"
-                                    data-row-index="${actualRowIndex}">
-                                    ${displayValue} ↗
-                                </a>
-                            </td>
-                        `;
+                          <td>
+                              <a href="#" class="clickable" 
+                                  data-to-tab="${escapeHtml(navTarget.toTab)}" 
+                                  data-link-field="${escapeHtml(
+                                    navTarget.linkField
+                                  )}" 
+                                  data-value="${escapeHtml(navTarget.value)}"
+                                  data-row-index="${actualRowIndex}">
+                                  ${displayValue} ↗
+                              </a>
+                          </td>
+                      `;
             } else {
               tableHTML += `<td>${displayValue}</td>`;
             }
@@ -1719,9 +2399,9 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       tableHTML += `
-                </tbody>
-            </table>
-        `;
+              </tbody>
+          </table>
+      `;
 
       tableContainer.innerHTML = tableHTML;
     }
@@ -1761,9 +2441,10 @@ document.addEventListener("DOMContentLoaded", function () {
           navigateToTab(toTab, linkField, value, rowData);
         });
       });
-    }, 0);
 
-    // Helper function for filter click handling
+      // Apply row highlighting
+      highlightRelatedRows();
+    }, 10);
     function handleFilterClick(e) {
       e.preventDefault();
       e.stopPropagation(); // Prevent triggering sort
